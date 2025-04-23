@@ -1,15 +1,19 @@
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
+import torch
 import pickle
+import torch.nn as nn
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from pathlib import Path
-
+from torch.utils.data import Dataset, DataLoader
+from sklearn.metrics import classification_report
+# Load the model and prepare for inference
+                              
 base_dir = Path(__file__).resolve().parent
 data_dir = base_dir / 'data'
-
 # Load models and encoders using the dynamic paths
 with open(data_dir / 'rf_model.pkl', 'rb') as rf_file:
     rf_model = pickle.load(rf_file)
@@ -25,6 +29,7 @@ with open(data_dir / 'label_encoders.pkl', 'rb') as encoders_file:
 
 with open(data_dir / 'scaler.pkl', 'rb') as scaler_file:
     scaler = pickle.load(scaler_file)
+
 
 cover_encoder = encoders['cover_encoder']
 
@@ -167,16 +172,29 @@ def predict_weather_type(n_clicks, temperature, humidity, wind_speed, precipitat
         rf_prediction = rf_model.predict(processed_input)[0]
         svm_prediction = svm_model.predict(processed_input)[0]
         xgb_prediction = xgb_model.predict(processed_input)[0]
+        dl_input = torch.tensor(processed_input.values, dtype=torch.float32)
+        
+        # Get prediction from the deep learning model
+        with torch.no_grad():
+            dl_output = dl_model(dl_input)
+            dl_prediction = torch.argmax(dl_output, dim=1).item()
 
         # Combine predictions
         predictions = {
             'Random Forest': weather_type_encoder.inverse_transform([rf_prediction])[0],
             'SVM': weather_type_encoder.inverse_transform([svm_prediction])[0],
-            'XGBoost': weather_type_encoder.inverse_transform([xgb_prediction])[0]
+            'XGBoost': weather_type_encoder.inverse_transform([xgb_prediction])[0],
+            'Deep Learning': weather_type_encoder.inverse_transform([dl_prediction])[0]
         }
 
         # Display the predictions
-        return f"Predicted Weather Type: {predictions['Random Forest']} (RF), {predictions['SVM']} (SVM), {predictions['XGBoost']} (XGBoost)"
+        return (
+            f"Predicted Weather Type:\n"
+            f"- Random Forest: {predictions['Random Forest']}\n"
+            f"- SVM: {predictions['SVM']}\n"
+            f"- XGBoost: {predictions['XGBoost']}\n"
+            f"- Deep Learning: {predictions['Deep Learning']}"
+        )
     
     return ''
 

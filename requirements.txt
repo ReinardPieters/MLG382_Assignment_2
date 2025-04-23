@@ -1,0 +1,8 @@
+dash
+pandas
+numpy
+scikit-learn
+torch
+torchvision
+torchaudio
+-f https://download.pytorch.org/whl/torch_stable.html
