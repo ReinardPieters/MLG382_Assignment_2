@@ -4,6 +4,7 @@ pandas
 numpy
 scikit-learn
 gunicorn
+xgboost 
 
 -f https://download.pytorch.org/whl/torch_stable.html
 torch
