@@ -1,8 +1,11 @@
 dash
+dash_bootstrap_components
 pandas
 numpy
 scikit-learn
+gunicorn
+
+-f https://download.pytorch.org/whl/torch_stable.html
 torch
 torchvision
 torchaudio
--f https://download.pytorch.org/whl/torch_stable.html

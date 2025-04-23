@@ -1,19 +1,17 @@
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
-import torch
 import pickle
-import torch.nn as nn
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from pathlib import Path
-from torch.utils.data import Dataset, DataLoader
-from sklearn.metrics import classification_report
-# Load the model and prepare for inference
+import base64
+import io
                               
 base_dir = Path(__file__).resolve().parent
 data_dir = base_dir / 'data'
+
 # Load models and encoders using the dynamic paths
 with open(data_dir / 'rf_model.pkl', 'rb') as rf_file:
     rf_model = pickle.load(rf_file)
@@ -66,38 +64,38 @@ app.layout = html.Div([
 
         # Dropdowns grouped together (third row)
         html.Div([
-            dcc.Dropdown(
-                id='cloud_cover',
-                options=[
-                    {'label': 'clear', 'value': 0},
-                    {'label': 'cloudy', 'value': 1},
-                    {'label': 'overcast', 'value': 2},
-                    {'label': 'partly cloudy', 'value': 3}
-                ],
-                placeholder='Select Cloud Cover',
-                style={'width': '100%'}
+        dcc.Dropdown(
+            id='cloud_cover',
+            options=[
+                {'label': 'clear', 'value': 'clear'},
+                {'label': 'cloudy', 'value': 'cloudy'},
+                {'label': 'overcast', 'value': 'overcast'},
+                {'label': 'partly cloudy', 'value': 'partly cloudy'}
+            ],
+            placeholder='Select Cloud Cover',
+            style={'width': '100%'}
             ),
-            dcc.Dropdown(
-                id='season',
-                options=[
-                    {'label': 'Autumn', 'value': 0},
-                    {'label': 'Spring', 'value': 1},
-                    {'label': 'Summer', 'value': 2},
-                    {'label': 'Winter', 'value': 3}
-                ],
-                placeholder='Select Season',
-                style={'width': '100%'}
-            ),
-            dcc.Dropdown(
-                id='location',
-                options=[
-                    {'label': 'coastal', 'value': 0},
-                    {'label': 'inland', 'value': 1},
-                    {'label': 'mountain', 'value': 2}
-                ],
-                placeholder='Select Location',
-                style={'width': '100%'}
-            )
+        dcc.Dropdown(
+            id='season',
+            options=[
+                {'label': 'Autumn', 'value': 'Autumn'},
+                {'label': 'Spring', 'value': 'Spring'},
+                {'label': 'Summer', 'value': 'Summer'},
+                {'label': 'Winter', 'value': 'Winter'}
+            ],
+            placeholder='Select Season',
+            style={'width': '100%'}
+        ),
+        dcc.Dropdown(
+            id='location',
+            options=[
+                {'label': 'coastal', 'value': 'coastal'},
+                {'label': 'inland', 'value': 'inland'},
+                {'label': 'mountain', 'value': 'mountain'}
+            ],
+            placeholder='Select Location',
+            style={'width': '100%'}
+        )
         ], style={'display': 'grid', 'gap': '10px', 'gridTemplateColumns': 'repeat(3, 1fr)'}),
 
         html.Br(),
@@ -132,7 +130,50 @@ app.layout = html.Div([
     ], style={'textAlign': 'center'}),
 
     # Output section
-    html.Div(id='prediction-output', style={'marginTop': '30px', 'textAlign': 'center', 'fontSize': '18px'})
+    html.Div(id='prediction-output', style={'marginTop': '30px', 'textAlign': 'center', 'fontSize': '18px'}),
+html.Div([
+    html.H3("Upload CSV for Bulk Predictions", style={
+        'textAlign': 'center',
+        'marginBottom': '20px'
+    }),
+    dcc.Upload(
+        id='upload-data',
+        children=html.Div([
+            'Drag and Drop or ',
+            html.A('Select File')
+        ]),
+        style={
+            'width': '100%',
+            'height': '60px',
+            'lineHeight': '60px',
+            'borderWidth': '1px',
+            'borderStyle': 'dashed',
+            'borderRadius': '5px',
+            'textAlign': 'center',
+            'backgroundColor': '#f0f0f0',
+            'marginBottom': '20px',
+            'cursor': 'pointer'
+        },
+        multiple=False
+    ),
+    html.Div(
+        id='bulk-prediction-output',
+        style={
+            'padding': '20px',
+            'border': '1px solid #ccc',
+            'borderRadius': '10px',
+            'boxShadow': '0 4px 10px rgba(0,0,0,0.05)',
+            'backgroundColor': '#f9f9f9',
+            'maxWidth': '900px',
+            'marginLeft': 'auto',
+            'marginRight': 'auto'
+        }
+    )
+], style={
+    'maxWidth': '900px',
+    'margin': '0 auto',
+    'padding': '20px'
+})
 ])
 # Function to get the prediction
 @app.callback(
@@ -172,19 +213,15 @@ def predict_weather_type(n_clicks, temperature, humidity, wind_speed, precipitat
         rf_prediction = rf_model.predict(processed_input)[0]
         svm_prediction = svm_model.predict(processed_input)[0]
         xgb_prediction = xgb_model.predict(processed_input)[0]
-        dl_input = torch.tensor(processed_input.values, dtype=torch.float32)
         
         # Get prediction from the deep learning model
-        with torch.no_grad():
-            dl_output = dl_model(dl_input)
-            dl_prediction = torch.argmax(dl_output, dim=1).item()
+
 
         # Combine predictions
         predictions = {
             'Random Forest': weather_type_encoder.inverse_transform([rf_prediction])[0],
             'SVM': weather_type_encoder.inverse_transform([svm_prediction])[0],
             'XGBoost': weather_type_encoder.inverse_transform([xgb_prediction])[0],
-            'Deep Learning': weather_type_encoder.inverse_transform([dl_prediction])[0]
         }
 
         # Display the predictions
@@ -193,7 +230,6 @@ def predict_weather_type(n_clicks, temperature, humidity, wind_speed, precipitat
             f"- Random Forest: {predictions['Random Forest']}\n"
             f"- SVM: {predictions['SVM']}\n"
             f"- XGBoost: {predictions['XGBoost']}\n"
-            f"- Deep Learning: {predictions['Deep Learning']}"
         )
     
     return ''
@@ -242,7 +278,90 @@ def preprocess_input(inputs):
     input_data_final = input_data_final[['Temperature', 'Humidity', 'Wind Speed', 'Precipitation (%)', 'Cloud Cover', 'Atmospheric Pressure', 'UV Index', 'Season', 'Visibility (km)', 'Location', 'Temperature_Humidity', 'Wind_Speed_Precip']]
     
     return input_data_final
+@app.callback(
+    Output('bulk-prediction-output', 'children'),
+    Input('upload-data', 'contents'),
+    prevent_initial_call=True
+)
+def predict_bulk_weather(contents):
+    content_type, content_string = contents.split(',')
+    decoded = base64.b64decode(content_string)
 
+    try:
+        df = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
+
+        required_columns = ['temperature', 'humidity', 'wind_speed', 'precipitation', 'cloud_cover',
+                            'pressure', 'uv_index', 'season', 'visibility', 'location']
+
+        missing_cols = [col for col in required_columns if col not in df.columns]
+        if missing_cols:
+            return html.Div([
+                html.H4("Invalid CSV File", style={'color': 'red'}),
+                html.P(f"The following required columns are missing: {', '.join(missing_cols)}"),
+                html.P("Please make sure your CSV contains all the required columns.")
+            ])
+
+        predictions = []
+
+        for i, row in df.iterrows():
+            try:
+                inputs = row[required_columns].to_dict()
+
+                # Ensure no NaNs in numeric fields
+                numeric_fields = ['temperature', 'humidity', 'wind_speed', 'precipitation', 'pressure', 'uv_index', 'visibility']
+                if any(pd.isna(inputs[col]) for col in numeric_fields):
+                    raise ValueError("Missing numeric values.")
+
+                # Check for valid category values
+                if inputs['cloud_cover'] not in [0, 1, 2, 3]:
+                    raise ValueError("Invalid cloud_cover value.")
+                if inputs['season'] not in [0, 1, 2, 3]:
+                    raise ValueError("Invalid season value.")
+                if inputs['location'] not in [0, 1, 2]:
+                    raise ValueError("Invalid location value.")
+
+                # Preprocess and predict
+                processed_input = preprocess_input(inputs)
+                rf_pred = rf_model.predict(processed_input)[0]
+                svm_pred = svm_model.predict(processed_input)[0]
+                xgb_pred = xgb_model.predict(processed_input)[0]
+
+                predictions.append({
+                    'Row': i + 1,
+                    'Random Forest': weather_type_encoder.inverse_transform([rf_pred])[0],
+                    'SVM': weather_type_encoder.inverse_transform([svm_pred])[0],
+                    'XGBoost': weather_type_encoder.inverse_transform([xgb_pred])[0],
+                    'Note': ''
+                })
+
+            except Exception as row_err:
+                predictions.append({
+                    'Row': i + 1,
+                    'Random Forest': 'Error',
+                    'SVM': 'Error',
+                    'XGBoost': 'Error',
+                    'Note': f"Row error: {row_err}"
+                })
+
+        result_df = pd.DataFrame(predictions)
+        return html.Div([
+            html.H4("Prediction Results"),
+            dcc.Graph(
+                figure={
+                    'data': [{
+                        'type': 'table',
+                        'header': {'values': list(result_df.columns)},
+                        'cells': {'values': [result_df[col] for col in result_df.columns]}
+                    }]
+                }
+            )
+        ])
+
+    except Exception as e:
+        return html.Div([
+            html.H4("File Processing Error", style={'color': 'red'}),
+            html.P(f"An error occurred while processing the file: {str(e)}")
+        ])
 # Run the app
 if __name__ == '__main__':
     app.run(debug=True)
