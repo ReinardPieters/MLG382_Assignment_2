@@ -8,11 +8,14 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder
 from pathlib import Path
 import base64
 import io
+import torch
                               
 base_dir = Path(__file__).resolve().parent
 data_dir = base_dir / 'data'
 
 # Load models and encoders using the dynamic paths
+ft_model = torch.load(data_dir / 'ft_transformer_model.pkl', map_location=torch.device('cpu'))
+
 with open(data_dir / 'rf_model.pkl', 'rb') as rf_file:
     rf_model = pickle.load(rf_file)
 
@@ -216,6 +219,17 @@ def predict_weather_type(n_clicks, temperature, humidity, wind_speed, precipitat
         
         # Get prediction from the deep learning model
 
+        ft_input = torch.tensor(processed_input.values, dtype=torch.float32)
+
+        # Ensure model is in evaluation mode
+        ft_model.eval()
+        
+        # Get prediction from the deep learning model
+        with torch.no_grad():
+            dl_output = ft_model(ft_input)
+            if dl_output.dim() == 1:  # in case batch size is 1 and model returns shape [num_classes]
+                dl_output = dl_output.unsqueeze(0)
+            dl_prediction = torch.argmax(dl_output, dim=1).item()
 
         # Combine predictions
         predictions = {
