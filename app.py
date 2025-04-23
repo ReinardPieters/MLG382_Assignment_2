@@ -9,6 +9,8 @@ from pathlib import Path
 import base64
 import io
 import torch
+import os
+from ft_transformer_model import FTTransformer
                               
 base_dir = Path(__file__).resolve().parent
 data_dir = base_dir / 'data'
@@ -212,21 +214,44 @@ def predict_weather_type(n_clicks, temperature, humidity, wind_speed, precipitat
         # Preprocess the input data (now passing the dictionary)
         processed_input = preprocess_input(inputs)
 
+        ft_input_cat = processed_input[['Season', 'Location']]
+        ft_input_num = processed_input[['Temperature', 'Humidity', 'Wind Speed', 'Precipitation (%)', 'Cloud Cover', 'Atmospheric Pressure', 'UV Index', 'Visibility (km)', 'Temperature_Humidity', 'Wind_Speed_Precip']]
+        
+        #print("Numerical columns at inference:", ft_input_num.shape)
+
         # Make predictions using each model
         rf_prediction = rf_model.predict(processed_input)[0]
         svm_prediction = svm_model.predict(processed_input)[0]
         xgb_prediction = xgb_model.predict(processed_input)[0]
-        
-        # Get prediction from the deep learning model
+        ft_input_cat = torch.tensor(ft_input_cat.values, dtype=torch.long)
+        ft_input_num = torch.tensor(ft_input_num.values, dtype=torch.float32)
 
-        ft_input = torch.tensor(processed_input.values, dtype=torch.float32)
+                # Define model hyperparameters exactly as used during training
+        cat_dims = [4, 3]  # Season, Location
+        num_cont = 10      # Number of numeric columns
+        emb_dim = 64
+        transformer_layers = 4
+        n_classes = 4      # Number of classes for "Weather Type"
 
-        # Ensure model is in evaluation mode
+        # Create the model instance
+        ft_model = FTTransformer(
+            cat_dims=cat_dims,
+            num_cont=num_cont,
+            emb_dim=emb_dim,
+            transformer_layers=transformer_layers,
+            n_classes=n_classes
+        )
+
+        # Load the trained weights
+        model_path = os.path.join("data", "ft_transformer_model.pkl")
+        ft_model.load_state_dict(torch.load(model_path, map_location=torch.device("cpu")))
+
+        # Set model to evaluation mode
         ft_model.eval()
         
         # Get prediction from the deep learning model
         with torch.no_grad():
-            dl_output = ft_model(ft_input)
+            dl_output = ft_model(ft_input_cat, ft_input_num)
             if dl_output.dim() == 1:  # in case batch size is 1 and model returns shape [num_classes]
                 dl_output = dl_output.unsqueeze(0)
             dl_prediction = torch.argmax(dl_output, dim=1).item()
@@ -236,6 +261,7 @@ def predict_weather_type(n_clicks, temperature, humidity, wind_speed, precipitat
             'Random Forest': weather_type_encoder.inverse_transform([rf_prediction])[0],
             'SVM': weather_type_encoder.inverse_transform([svm_prediction])[0],
             'XGBoost': weather_type_encoder.inverse_transform([xgb_prediction])[0],
+            'FTtransformer': weather_type_encoder.inverse_transform([dl_prediction])[0]
         }
 
         # Display the predictions
@@ -244,6 +270,7 @@ def predict_weather_type(n_clicks, temperature, humidity, wind_speed, precipitat
             f"- Random Forest: {predictions['Random Forest']}\n"
             f"- SVM: {predictions['SVM']}\n"
             f"- XGBoost: {predictions['XGBoost']}\n"
+            f"- FTtransformer: {predictions['FTtransformer']}\n"
         )
     
     return ''
