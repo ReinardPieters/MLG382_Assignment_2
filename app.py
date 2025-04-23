@@ -38,61 +38,97 @@ weather_type_encoder = encoders['weather_type_encoder']
 app = dash.Dash(__name__)
 
 app.layout = html.Div([
-    html.H1("Weather Type Prediction", style={'textAlign': 'center'}),
-    
-    # User input fields for weather features
+    html.H1("Weather Type Prediction", style={'textAlign': 'center', 'marginBottom': '30px'}),
+
     html.Div([
-        dcc.Input(id='temperature', type='number', placeholder='Temperature', debounce=True),
-        dcc.Input(id='humidity', type='number', placeholder='Humidity', debounce=True),
-        dcc.Input(id='wind_speed', type='number', placeholder='Wind Speed', debounce=True),
-        dcc.Input(id='precipitation', type='number', placeholder='Precipitation (%)', debounce=True),
-        dcc.Input(id='cloud_cover', type='text', placeholder='Cloud Cover', debounce=True),
-        dcc.Input(id='pressure', type='number', placeholder='Atmospheric Pressure', debounce=True),
-        dcc.Input(id='uv_index', type='number', placeholder='UV Index', debounce=True),
-        dcc.Input(id='season', type='text', placeholder='Season', debounce=True),
-        dcc.Input(id='visibility', type='number', placeholder='Visibility (km)', debounce=True),
-        dcc.Input(id='location', type='text', placeholder='Location', debounce=True),
-    ], style={'display': 'grid', 'gap': '10px', 'grid-template-columns': 'repeat(3, 1fr)'}),
-    
-    # Button to trigger prediction
-    html.Button('Predict Weather Type', id='predict-button', n_clicks=0),
-    
-    # Output area for prediction
-    html.Div(id='prediction-output', style={'margin-top': '20px'}),
+        # Numeric inputs (first row)
+        html.Div([
+            dcc.Input(id='temperature', type='number', placeholder='Temperature (°C)', debounce=True, style={'width': '100%'}),
+            dcc.Input(id='humidity', type='number', placeholder='Humidity (%)', debounce=True, style={'width': '100%'}),
+            dcc.Input(id='wind_speed', type='number', placeholder='Wind Speed (km/h)', debounce=True, style={'width': '100%'})
+        ], style={'display': 'grid', 'gap': '10px', 'gridTemplateColumns': 'repeat(3, 1fr)'}),
+
+        html.Br(),
+
+        # More numeric inputs (second row)
+        html.Div([
+            dcc.Input(id='precipitation', type='number', placeholder='Precipitation (%)', debounce=True, style={'width': '100%'}),
+            dcc.Input(id='pressure', type='number', placeholder='Pressure (hPa)', debounce=True, style={'width': '100%'}),
+            dcc.Input(id='uv_index', type='number', placeholder='UV Index', debounce=True, style={'width': '100%'})
+        ], style={'display': 'grid', 'gap': '10px', 'gridTemplateColumns': 'repeat(3, 1fr)'}),
+
+        html.Br(),
+
+        # Dropdowns grouped together (third row)
+        html.Div([
+            dcc.Dropdown(
+                id='cloud_cover',
+                options=[
+                    {'label': 'clear', 'value': 0},
+                    {'label': 'cloudy', 'value': 1},
+                    {'label': 'overcast', 'value': 2},
+                    {'label': 'partly cloudy', 'value': 3}
+                ],
+                placeholder='Select Cloud Cover',
+                style={'width': '100%'}
+            ),
+            dcc.Dropdown(
+                id='season',
+                options=[
+                    {'label': 'Autumn', 'value': 0},
+                    {'label': 'Spring', 'value': 1},
+                    {'label': 'Summer', 'value': 2},
+                    {'label': 'Winter', 'value': 3}
+                ],
+                placeholder='Select Season',
+                style={'width': '100%'}
+            ),
+            dcc.Dropdown(
+                id='location',
+                options=[
+                    {'label': 'coastal', 'value': 0},
+                    {'label': 'inland', 'value': 1},
+                    {'label': 'mountain', 'value': 2}
+                ],
+                placeholder='Select Location',
+                style={'width': '100%'}
+            )
+        ], style={'display': 'grid', 'gap': '10px', 'gridTemplateColumns': 'repeat(3, 1fr)'}),
+
+        html.Br(),
+
+        # Visibility input on its own row
+        html.Div([
+            dcc.Input(id='visibility', type='number', placeholder='Visibility (km)', debounce=True, style={'width': '100%'})
+        ], style={'marginTop': '10px'})
+    ], style={
+        'maxWidth': '900px',
+        'margin': '0 auto',
+        'padding': '20px',
+        'border': '1px solid #ccc',
+        'borderRadius': '10px',
+        'boxShadow': '0 4px 10px rgba(0,0,0,0.05)',
+        'backgroundColor': '#f9f9f9'
+    }),
+
+    html.Br(),
+
+    # Predict button
+    html.Div([
+        html.Button('Predict Weather Type', id='predict-button', n_clicks=0, style={
+            'padding': '10px 20px',
+            'fontSize': '16px',
+            'cursor': 'pointer',
+            'borderRadius': '8px',
+            'backgroundColor': '#007bff',
+            'color': '#fff',
+            'border': 'none'
+        })
+    ], style={'textAlign': 'center'}),
+
+    # Output section
+    html.Div(id='prediction-output', style={'marginTop': '30px', 'textAlign': 'center', 'fontSize': '18px'})
 ])
-
-# Function to preprocess the input data
-def preprocess_input(inputs):
-    # Get the input values
-    temp = inputs['temperature']
-    humidity = inputs['humidity']
-    wind_speed = inputs['wind_speed']
-    precipitation = inputs['precipitation']
-    cloud_cover = inputs['cloud_cover']
-    pressure = inputs['pressure']
-    uv_index = inputs['uv_index']
-    season = inputs['season']
-    visibility = inputs['visibility']
-    location = inputs['location']
-    
-    # Create the additional features: Temperature_Humidity, Wind_Speed_Precip
-    temperature_humidity = temp * humidity
-    wind_speed_precip = wind_speed * precipitation
-    
-    # Handle encoding for non-numeric features
-    cloud_cover = cover_encoder.transform([cloud_cover])[0]
-    season = season_encoder.transform([season])[0]
-    location = location_encoder.transform([location])[0]
-    
-    # Combine all the input features into a DataFrame
-    input_data = pd.DataFrame([[temp, humidity, wind_speed, precipitation, cloud_cover, pressure, uv_index, season, visibility, location, temperature_humidity, wind_speed_precip]],
-                              columns=['Temperature', 'Humidity', 'Wind Speed', 'Precipitation (%)', 'Cloud Cover', 'Atmospheric Pressure', 'UV Index', 'Season', 'Visibility (km)', 'Location', 'Temperature_Humidity', 'Wind_Speed_Precip'])
-    
-    # Scale the features using the scaler
-    input_data_scaled = scaler.transform(input_data)
-    
-    return input_data_scaled
-
 # Function to get the prediction
 @app.callback(
     Output('prediction-output', 'children'),
