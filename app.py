@@ -277,6 +277,7 @@ def preprocess_input(inputs):
     input_data_final = input_data_final[['Temperature', 'Humidity', 'Wind Speed', 'Precipitation (%)', 'Cloud Cover', 'Atmospheric Pressure', 'UV Index', 'Season', 'Visibility (km)', 'Location', 'Temperature_Humidity', 'Wind_Speed_Precip']]
     
     return input_data_final
+server = app.server
 # Run the app
 if __name__ == '__main__':
     app.run(debug=True)
